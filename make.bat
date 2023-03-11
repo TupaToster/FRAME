@@ -1,3 +1,3 @@
-tasm /la hellowor.asm
-tlink /t hellowor.obj
-hellowor.com
+tasm /la frame.asm
+tlink /t frame.obj
+frame.com
