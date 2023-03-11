@@ -12,7 +12,7 @@ EXIT 		macro
 		int 21h
 		endm
 
-
+; just to test my git abilities
 start:
 
 		mov bx, 0b800h
