@@ -15,11 +15,6 @@ EXIT 		macro
 
 start:
 
-		mov bx, 0b800h
-		mov es, bx
-
-		call ClearScr
-
 		xor ax, ax
 		xor cx, cx
 		xor dx, dx
@@ -27,9 +22,17 @@ start:
 
 		call GetArgs
 
-		EXIT
+		push cx
+		push bx
+		mov bx, 0b800h
+		mov es, bx
 
-		mov bx, 3005h
+		call ClearScr
+
+		pop bx
+		pop cx
+
+		; mov bx, 3005h
 		mov cx, 0a0ah
 		mov ax, offset style
 		mov dx, offset text
@@ -65,19 +68,38 @@ GetArgs 	proc
 
 		mov si, 82h
 
+		cmp byte ptr [si], '-'
+		jne @@noHelp
+		cmp byte ptr [si + 1], 'h'
+		jne @@noHelp
+		mov ah, 09h
+		mov dx, offset help_message
+		int 21h
+		EXIT
+
+@@noHelp:	call Get2H
+
+		push ax 	; Saves ax
+
 		call Get2H
 
-		mov ah, 09h
-		mov es:14, ax
+		xor dx, dx
+		mov dl, al
+		xor ax, ax
+		pop ax		; Makes ax into desired format of XXYYh to move to bx
+		xchg ah, al
+		add al, dl
+		xor dx, dx
+
+		mov bx, ax
+		xor ax, ax
 
 		ret
 		endp
-
-
 ; ------------------------------------
-; Gets a 2 - number hex number from com line
+; Gets a 2 - digit hex number from com line
 ; ------------------------------------
-; Expects : si -> current com line powition
+; Expects : si -> current com line position
 
 ; Exit : al = read number
 
@@ -88,7 +110,17 @@ GetArgs 	proc
 Get2H		proc
 
 		xor ax, ax
-		lodsw		;Reads number as 2 bytes into ax and places them in order
+		lodsb		;Reads one by one to skip excess spaces
+
+@@skipSpace:	cmp al, ' '
+		jne @@noSkipSpace
+		xor ax, ax
+		lodsb
+		jmp @@skipSpace
+
+@@noSkipSpace:	sub si, 1
+		xor ax, ax
+		lodsw 		;Reads to digit hex num to ax
 		xchg al, ah
 
 		cmp al, 'a'
@@ -334,5 +366,6 @@ DrawY		proc
 		text db 'i am gae$'
 		wallX dw 09cdh
 		wallY dw 09bah
+		help_message db 'usage: (length of name represents required amount of digits, except for the text. All numbers are hex.)', 0ah, 0dh, 'frame.com X0 Y0 LX LY FRXL FRYL FLTC FRTC FLBC FRBC TEXT_TO_BE_DISPLAYED', 0ah, 0dh, 'Where  : ', 0ah, 0dh, 'X0 - left top X coord in range [00h, 50h]', 0ah, 0dh, 'Y0 - left top Y coord in range [00h, 1Eh]', 0ah, 0dh, 'LX - X length of working zone', 0ah, 0dh, 'LY - Y length of working zone', 0ah, 0dh, 'FRXL, FRYL - hex codes of horizontal and vertical line symbols', 0ah, 0dh, "FLTC, FRTC, FLBC, FRBC - left top, right top, left bottom and right bottom angles' codes", 0ah, 0dh, "TEXT_TO_BE_DISPLAYED - the text", 0ah, 0dh, '$'
 
 end start
