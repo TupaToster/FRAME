@@ -20,10 +20,19 @@ start:
 
 		call ClearScr
 
+		xor ax, ax
+		xor cx, cx
+		xor dx, dx
+		xor bx, bx
+
+		call GetArgs
+
+		EXIT
+
 		mov bx, 3005h
 		mov cx, 0a0ah
-		mov ax, offset default_style
-		mov dx, offset some_text
+		mov ax, offset style
+		mov dx, offset text
 
 		push ax		; saving registers
 		push bx		; saving registers
@@ -33,42 +42,96 @@ start:
 
 		call DrawFrame
 
-		EXIT
-
-		mov bx, 160d*5d + 60d
-		mov cx, 9d
-		mov ax, wallX
-
-		mov es:[bx], 09c9h
-		add bx, 2
-
-		call DrawX
-
-		mov es:[bx], 09bbh
-
-		mov bx, 160d * 6d + 60d
-		mov cx, 9d
-		mov ax, wallY
-
-		call DrawY
-
-		mov es:[bx], 09c8h
-
-		mov bx, 160d * 15d + 62d
-		mov cx, 9d
-		mov ax, wallX
-
-		call DrawX
-
-		mov es:[bx], 09bch
-
-		mov bx, 160d * 6d + 80d
-		mov cx, 9d
-		mov ax, wallY
-
-		call DrawY
+		pop si		; restoring regs
+		pop dx		; restoring regs
+		pop cx		; restoring regs
+		pop bx		; restoring regs
+		pop ax		; restoring regs
 
 		EXIT
+
+; ------------------------------------
+; Reads all the args from command line args
+; ------------------------------------
+; Expects : none
+
+; Exit : everything that DrawFrame needs in a proper format
+
+; Needs : none
+
+; destroys : si
+; ====================================
+GetArgs 	proc
+
+		mov si, 82h
+
+		call Get2H
+
+		mov ah, 09h
+		mov es:14, ax
+
+		ret
+		endp
+
+
+; ------------------------------------
+; Gets a 2 - number hex number from com line
+; ------------------------------------
+; Expects : si -> current com line powition
+
+; Exit : al = read number
+
+; Needs : none
+
+; Destroys : ax, dx
+; ====================================
+Get2H		proc
+
+		xor ax, ax
+		lodsw		;Reads number as 2 bytes into ax and places them in order
+		xchg al, ah
+
+		cmp al, 'a'
+		jae @@lowCaseAl
+
+		cmp al, 'A'
+		jae @@upCaseAl
+
+		sub al, '0'
+		jmp @@endOfConvAl
+
+@@lowCaseAl:	sub al, 'a'
+		jmp @@endOfConvAl
+
+@@upCaseAl:	sub al, 'A'
+
+@@endOfConvAl:	cmp ah, 'a'
+		jae @@lowCaseAh
+
+		cmp ah, 'A'
+		jae @@upCaseAh
+
+		sub ah, '0'
+		jmp @@endOfConvAh
+
+@@lowCaseAh:	sub ah, 'a'
+		jmp @@endOfConvAh
+
+@@upCaseAh:	sub ah, 'A'
+
+@@endOfConvAh:
+
+		push ax
+		xor al, al
+		mov dx, 10h
+		mul dx
+		pop dx
+		mov al, dl
+		add al, ah
+		xor ah, ah
+
+		ret
+		endp
 
 ; -------------------------------------
 ; Draws the frame and its contents
@@ -237,7 +300,6 @@ ClearScr	proc
 ; -------------------------------------
 
 DrawX		proc
-
 @@Next:		mov es:[bx], ax
 		add bx, 2d
 		loop @@Next
@@ -259,7 +321,6 @@ DrawX		proc
 ; -------------------------------------
 
 DrawY		proc
-
 @@Next:		mov es:[bx], ax
 		add bx, 160d
 		loop @@Next
@@ -269,8 +330,8 @@ DrawY		proc
 
 .data
 
-		default_style dw 09cdh, 09bah, 09c9h, 09bbh, 09c8h, 09bch
-		some_text db 'i am gae$'
+		style dw 09cdh, 09bah, 09c9h, 09bbh, 09c8h, 09bch
+		text db 'i am gae$'
 		wallX dw 09cdh
 		wallY dw 09bah
 
