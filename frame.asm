@@ -17,25 +17,28 @@ start:
 
 		xor ax, ax
 		xor cx, cx
-		xor dx, dx
+		xor dx, dx	; clearing regs of trash
 		xor bx, bx
+
+		mov ax, offset style
 
 		call GetArgs
 
 		push cx
-		push bx
-		mov bx, 0b800h
+		push bx		; saving bx, cx, ax
+		push ax
+
+		mov bx, 0b800h	; setting es to video mem
 		mov es, bx
 
 		call ClearScr
 
+		pop ax
 		pop bx
-		pop cx
+		pop cx		;restoring bx, cx, ax
 
 		; mov bx, 3005h
-		mov cx, 0a0ah
-		mov ax, offset style
-		mov dx, offset text
+		; mov cx, 0a0ah
 
 		push ax		; saving registers
 		push bx		; saving registers
@@ -62,16 +65,21 @@ start:
 
 ; Needs : none
 
-; destroys : si
+; destroys : si, di
 ; ====================================
 GetArgs 	proc
+
+		push dx
+		push ax
+		xor dx, dx
+		xor ax, ax	; Saves ax and dx
 
 		mov si, 82h
 
 		cmp byte ptr [si], '-'
 		jne @@noHelp
 		cmp byte ptr [si + 1], 'h'
-		jne @@noHelp
+		jne @@noHelp			; If user typed -h it means that he needs help + bios wipe
 		mov ah, 09h
 		mov dx, offset help_message
 		int 21h
@@ -83,18 +91,60 @@ GetArgs 	proc
 
 		call Get2H
 
-		xor dx, dx
-		mov dl, al
+		xor bx, bx
+		mov bl, al
 		xor ax, ax
-		pop ax		; Makes ax into desired format of XXYYh to move to bx
-		xchg ah, al
-		add al, dl
-		xor dx, dx
+		pop ax		; Puts second al -> bl and first al -> bh
+		mov bh, al
+		xor ax, ax
+;--------------------------------------------------------
+		call Get2H
 
-		mov bx, ax
+		push ax		; Saves ax
+
+		call Get2H
+
+		xor cx, cx
+		mov ch, al
+		xor ax, ax	; Puts al from first and al from second to ch and cl respectively
+		pop ax
+		mov cl, al
 		xor ax, ax
+;--------------------------------------------------------
+
+		pop di 		; Ptr for styles here
+
+		push bx		; Saving bx
+
+		xor bx, bx	; Zeroing bx for it to act as counter
+
+@@Next:		call Get2H
+
+		mov byte ptr [di + bx], al
+		xor ax, ax
+		inc bx
+
+		call Get2H
+
+		mov byte ptr [di + bx], al
+		xor ax, ax
+		inc bx
+
+		mov ax, [di + bx - 2]
+		xchg ah, al
+		mov [di + bx - 2], ax
+
+		cmp bx, 12d
+		jb @@Next
+
+		mov ax, di
+		xor di, di
+
+		pop bx
+		pop dx
 
 		ret
+
 		endp
 ; ------------------------------------
 ; Gets a 2 - digit hex number from com line
@@ -133,9 +183,11 @@ Get2H		proc
 		jmp @@endOfConvAl
 
 @@lowCaseAl:	sub al, 'a'
+		add al, 0ah
 		jmp @@endOfConvAl
 
 @@upCaseAl:	sub al, 'A'
+		add al, 0ah
 
 @@endOfConvAl:	cmp ah, 'a'
 		jae @@lowCaseAh
@@ -147,9 +199,11 @@ Get2H		proc
 		jmp @@endOfConvAh
 
 @@lowCaseAh:	sub ah, 'a'
+		add ah, 0ah
 		jmp @@endOfConvAh
 
 @@upCaseAh:	sub ah, 'A'
+		add ah, 0ah
 
 @@endOfConvAh:
 
@@ -308,8 +362,8 @@ DrawFrame	proc
 
 ClearScr	proc
 
-		mov al, 0dbh
-		mov ah, 00000000b
+		mov al, 20h
+		xor ah, ah
 		xor bx, bx
 		mov cx, 80d * 25d
 @@Next:		mov es:[bx], ax
@@ -363,7 +417,6 @@ DrawY		proc
 .data
 
 		style dw 09cdh, 09bah, 09c9h, 09bbh, 09c8h, 09bch
-		text db 'i am gae$'
 		wallX dw 09cdh
 		wallY dw 09bah
 		help_message db 'usage: (length of name represents required amount of digits, except for the text. All numbers are hex.)', 0ah, 0dh, 'frame.com X0 Y0 LX LY FRXL FRYL FLTC FRTC FLBC FRBC TEXT_TO_BE_DISPLAYED', 0ah, 0dh, 'Where  : ', 0ah, 0dh, 'X0 - left top X coord in range [00h, 50h]', 0ah, 0dh, 'Y0 - left top Y coord in range [00h, 1Eh]', 0ah, 0dh, 'LX - X length of working zone', 0ah, 0dh, 'LY - Y length of working zone', 0ah, 0dh, 'FRXL, FRYL - hex codes of horizontal and vertical line symbols', 0ah, 0dh, "FLTC, FRTC, FLBC, FRBC - left top, right top, left bottom and right bottom angles' codes", 0ah, 0dh, "TEXT_TO_BE_DISPLAYED - the text", 0ah, 0dh, '$'
