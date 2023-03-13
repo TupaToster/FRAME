@@ -69,10 +69,8 @@ start:
 ; ====================================
 GetArgs 	proc
 
-		push dx
-		push ax
-		xor dx, dx
-		xor ax, ax	; Saves ax and dx
+		mov di, ax 			; For use in getting style part
+		xor ax, ax
 
 		mov si, 82h
 
@@ -85,9 +83,9 @@ GetArgs 	proc
 		int 21h
 		EXIT
 
-@@noHelp:	call Get2H
+@@noHelp:	call Get2H	; Generally gets initial coords of da frame
 
-		push ax 	; Saves ax
+		push ax 	; Saves ax temporarily
 
 		call Get2H
 
@@ -97,10 +95,13 @@ GetArgs 	proc
 		pop ax		; Puts second al -> bl and first al -> bh
 		mov bh, al
 		xor ax, ax
-;--------------------------------------------------------
-		call Get2H
 
-		push ax		; Saves ax
+		push bx		; Saves bx
+		xor bx, bx
+;--------------------------------------------------------
+		call Get2H	; Gets Inside size of a frame
+
+		push ax		; Saves ax temporarily
 
 		call Get2H
 
@@ -110,38 +111,66 @@ GetArgs 	proc
 		pop ax
 		mov cl, al
 		xor ax, ax
+
+		push cx		; Saves cx
+		xor cx, cx
 ;--------------------------------------------------------
-
-		pop di 		; Ptr for styles here
-
-		push bx		; Saving bx
-
-		xor bx, bx	; Zeroing bx for it to act as counter
+				; Gets style characters
 
 @@Next:		call Get2H
 
 		mov byte ptr [di + bx], al
-		xor ax, ax
+		xor ax, ax			;Reads byte to ax, incs bx
 		inc bx
 
 		call Get2H
 
 		mov byte ptr [di + bx], al
-		xor ax, ax
+		xor ax, ax			; Reads next byter to ax, incs bx
 		inc bx
 
 		mov ax, [di + bx - 2]
-		xchg ah, al
+		xchg ah, al			; xchgs 2 byter in memory
 		mov [di + bx - 2], ax
 
-		cmp bx, 12d
+		cmp bx, 12d			; loop for all the styles (which is 6 words) to be read
 		jb @@Next
 
-		mov ax, di
+		push di			; Saves result for it to be placed back to ax right before ret
 		xor di, di
 
+;----------------------------------------------------
+				;Gets style byte of the text
+
+		call Get2H
+
+		mov textStyleByte, al
+
+		xor ax, ax
+
+;-----------------------------------------------------
+
+				; Gets text that is to be written
+
+		xor ax, ax
+		lodsb
+
+		mov cx, 127d
+
+@@skipSpace: 	cmp al, ' '
+		jne @@noSkipSpace
+		xor ax, ax
+		lodsb
+		loop @@skipSpace
+
+@@noSkipSpace:	sub si, 1
+
+		mov dx, si		;moves text beginning ptr to dx
+
+;-----------------------------------------------------
+		pop ax
+		pop cx
 		pop bx
-		pop dx
 
 		ret
 
@@ -232,8 +261,11 @@ Get2H		proc
 ; =====================================
 DrawFrame	proc
 
+		mov di, dx 		; saves dx in di cause dx is somehow changed (QUICK FIX!!!!)
+
 		push bx
-		push ax
+		push ax			; temp save ax, bx
+
 		xor ax, ax
 		mov al, bl
 		mov si, 160d
@@ -253,16 +285,14 @@ DrawFrame	proc
 
 		push cx
 		xor cl, cl
-		mov cl, ch
+		mov cl, ch		; cl = ch, ch = 0
 		xor ch, ch
 
-		mov si, ax
+		mov si, ax		; Saves ax to si
 		mov ax, [si + 4]	; Draw top left angle
 		mov es:[bx], ax
-
-
 		add bx, 2d
-		mov ax, [si]
+		mov ax, [si]		; Do delta one right
 
 		call DrawX		; Draw upper horizontal line
 
@@ -270,7 +300,7 @@ DrawFrame	proc
 		mov es:[bx], ax		; Draw top right angle
 
 		pop cx
-		pop bx
+		pop bx			; move 1 row down
 		push bx
 		add bx, 160d
 
@@ -279,7 +309,7 @@ DrawFrame	proc
 		xor ax, ax
 		mov ax, 160d
 		xor ch, ch
-		mul cx			; Add 160d * cl to bx
+		mul cx			; Add 160d * cl to bx, move cl rows down
 		mov cx, ax
 		xor ax, ax
 		add bx, cx
@@ -298,7 +328,7 @@ DrawFrame	proc
 
 		mov ax, [si]		; Set horizontal line symbol
 
-		call DrawX
+		call DrawX		; Draw low horizontal line
 
 		mov ax, [si + 10]
 		mov es:[bx], ax		; Bottom right angle
@@ -311,17 +341,17 @@ DrawFrame	proc
 
 		xor ch, ch
 
-		add bx, 160d
+		add bx, 160d		; one row down
 
 		mov ax, [si + 2]	; Set current draw symbol to vert line
 
-		call DrawY
+		call DrawY		; draw left line
 
 		xor cx, cx
 		xor bx, bx		; Restore bx and cx
 		pop cx
 		pop bx
-		push bx
+		push bx			; and save them again
 		push cx
 
 		xor cl, cl
@@ -329,20 +359,72 @@ DrawFrame	proc
 		xor ch, ch
 
 		add bx, 162d
-		add bx, cx
+		add bx, cx		;moves bx one right + one down
 		add bx, cx
 
 		pop cx
-		push cx
+		push cx			;restore cx, and save
 
 		xor ch, ch
 
-		mov ax, [si + 2]
+		mov ax, [si + 2]	;current draw symbol to vert line
 
-		call DrawY
+		call DrawY		; draw right vert line
 
-		pop cx
+		pop cx			; restore cx, bx
 		pop bx
+
+		add bx, 162d		; move bx right + down
+
+		push bx
+		push cx			; save bx and cx
+
+		mov si, di		; si points to text beginning
+		xor dx, dx
+
+		mov dh, textStyleByte
+
+@@Next:		cmp byte ptr [si], '$'		; Check if the text ended. break if true
+		je @@endLoop
+
+		cmp byte ptr [si], '\'
+		jne @@noNewLine
+		cmp byte ptr [si + 1], 'n'
+		jne @@noNewLine
+		add si, 2
+		pop ax
+		push ax
+		mov al, ah
+		sub al, ch
+		mov ch, ah
+		xor ah, ah
+		dec cl
+		add bx, 160d
+		sub bx, ax
+		sub bx, ax
+		cmp cl, 0d
+		ja @@Next
+		jmp @@endLoop
+@@noNewLine:	mov dl, byte ptr [si]
+		mov es:[bx], dx			;print symbol via [si]->dl and move right
+		add bx, 2d
+		inc si
+		sub ch, 1d			; dec ch that counts amount of space left on x
+		cmp ch, 0d
+		ja @@Next
+		pop ax
+		mov ch, ah ; if ch == 0: ch = ch0, cl--
+		push ax
+		dec cl
+		add bx, 160d
+		mov al, ah
+		xor ah, ah		; Sets bx on a new line
+		sub bx, ax
+		sub bx, ax
+		cmp cl, 0d		; if cl == 0 break
+		ja @@Next
+
+@@endLoop:
 
 		EXIT
 
@@ -362,10 +444,10 @@ DrawFrame	proc
 
 ClearScr	proc
 
-		mov al, 20h
+		mov al, 0dbh
 		xor ah, ah
 		xor bx, bx
-		mov cx, 80d * 25d
+		mov cx, 80d * 23d
 @@Next:		mov es:[bx], ax
 		add bx, 2
 		loop @@Next
@@ -417,8 +499,8 @@ DrawY		proc
 .data
 
 		style dw 09cdh, 09bah, 09c9h, 09bbh, 09c8h, 09bch
-		wallX dw 09cdh
-		wallY dw 09bah
-		help_message db 'usage: (length of name represents required amount of digits, except for the text. All numbers are hex.)', 0ah, 0dh, 'frame.com X0 Y0 LX LY FRXL FRYL FLTC FRTC FLBC FRBC TEXT_TO_BE_DISPLAYED', 0ah, 0dh, 'Where  : ', 0ah, 0dh, 'X0 - left top X coord in range [00h, 50h]', 0ah, 0dh, 'Y0 - left top Y coord in range [00h, 1Eh]', 0ah, 0dh, 'LX - X length of working zone', 0ah, 0dh, 'LY - Y length of working zone', 0ah, 0dh, 'FRXL, FRYL - hex codes of horizontal and vertical line symbols', 0ah, 0dh, "FLTC, FRTC, FLBC, FRBC - left top, right top, left bottom and right bottom angles' codes", 0ah, 0dh, "TEXT_TO_BE_DISPLAYED - the text", 0ah, 0dh, '$'
+		textStyleByte db 09
+		; style dw ?, ?, ?, ?, ?, ?
+		help_message db 'usage: (length of name represents required amount of digits, except for the text. All numbers are hex.)', 0ah, 0dh, 'frame.com X0 Y0 LX LY FRXL FRYL FLTC FRTC FLBC FRBC TS TEXT_TO_BE_DISPLAYED', 0ah, 0dh, 'Where  : ', 0ah, 0dh, 'X0 - left top X coord in range [00h, 50h]', 0ah, 0dh, 'Y0 - left top Y coord in range [00h, 1Eh]', 0ah, 0dh, 'LX - X length of working zone', 0ah, 0dh, 'LY - Y length of working zone', 0ah, 0dh, 'FRXL, FRYL - hex codes of horizontal and vertical line symbols', 0ah, 0dh, "FLTC, FRTC, FLBC, FRBC - left top, right top, left bottom and right bottom angles' codes", 0ah, 0dh, 'TS - text style, a 2 digit hex', 0ah, 0dh, 'TEXT_TO_BE_DISPLAYED - the text, ending in dollar sign$'
 
 end start
