@@ -426,11 +426,12 @@ DrawFrame	proc
 
 @@endLoop:
 
-		EXIT
+
+		pop cx
+		pop cx
 
 		ret
 		endp
-
 
 ; -------------------------------------
 ; Clears the screen
